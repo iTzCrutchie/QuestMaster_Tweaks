@@ -2,7 +2,11 @@
 ## Title: QuestMaster [|cFF00FF00Tweaks|r]
 ## Notes: Tweaks for QuestMaster.
 ## Author: QuestMaster Team, Crutchie
-## Version: 0.0.1
+## Version: 0.1.0
 ## Dependencies: QuestMaster
 
+Locales\Locales.lua
 QuestMaster_Tweaks.lua
+Modules\Navigation.lua
+Modules\QuestTracker.lua
+Modules\MapPins.lua
