@@ -261,10 +261,6 @@ f:SetScript("OnEvent", function(self, event)
     -- 6. Hook Tracker Frame Updates (Title Override & Scanning Rows)
     -- ------------------------------------------------------------------------
     hooksecurefunc(QM, "UpdateTracker", function()
-        -- Header text to "Quests"
-        if QM.TrackerFrame and QM.TrackerFrame.header and QM.TrackerFrame.header.title then
-            QM.TrackerFrame.header.title:SetText("|cFFFFD700Quests|r")
-        end
 
         -- Hook active quest title rows
         if QM.TrackerQuestRows then
