@@ -88,7 +88,37 @@ f:SetScript("OnEvent", function(self, event)
     end
 
     -- ------------------------------------------------------------------------
-    -- 2. Override QM:ClickOpensQuestLog
+    -- 2. Waypoint Lock: Guard against auto-selector purging unaccepted quests
+    -- ------------------------------------------------------------------------
+    if QM.SetWaypoint then
+        local origSetWaypoint = QM.SetWaypoint
+        QM.SetWaypoint = function(self, questId, objIndex, x, y, mapId, title, isManual, ...)
+            origSetWaypoint(self, questId, objIndex, x, y, mapId, title, isManual, ...)
+            if isManual then
+                self.isManualWaypoint = true
+                if self.currentWaypoint then
+                    self.currentWaypoint.isManual = true
+                end
+                self.manualWaypointSetAt = GetTime()
+            end
+        end
+    end
+
+    local autoPickerNames = {"AutoSelectNearestQuest", "UpdateNearestWaypoint", "PickClosestObjective", "AutoSelectNext"}
+    for _, funcName in ipairs(autoPickerNames) do
+        if QM[funcName] then
+            local origPicker = QM[funcName]
+            QM[funcName] = function(self, ...)
+                if self.isManualWaypoint or (self.currentWaypoint and self.currentWaypoint.isManual) then
+                    return
+                end
+                return origPicker(self, ...)
+            end
+        end
+    end
+
+    -- ------------------------------------------------------------------------
+    -- 3. Override QM:ClickOpensQuestLog
     -- ------------------------------------------------------------------------
     QM.ClickOpensQuestLog = function(self)
         local mode = self.db and self.db.profile and self.db.profile.tracker and self.db.profile.tracker.openQuestLog or "ctrl"
@@ -99,7 +129,7 @@ f:SetScript("OnEvent", function(self, event)
     end
 
     -- ------------------------------------------------------------------------
-    -- 3. Shared Tooltip Pruning & Rebuilding Helper
+    -- 4. Shared Tooltip Pruning & Rebuilding Helper
     -- ------------------------------------------------------------------------
     local function RebuildTrackerTooltip(isObjectiveLine)
         if not GameTooltip:IsShown() then return end
@@ -107,7 +137,6 @@ f:SetScript("OnEvent", function(self, event)
         local numLines = GameTooltip:NumLines()
         if numLines < 2 then return end
 
-        -- Snapshot lines
         local lines = {}
         for i = 1, numLines do
             local left = _G["GameTooltipTextLeft" .. i]
@@ -124,7 +153,6 @@ f:SetScript("OnEvent", function(self, event)
             }
         end
 
-        -- Prune stock hint instructions from bottom up
         local cutIndex = numLines
         while cutIndex > 1 do
             local text = lines[cutIndex].left
@@ -146,7 +174,6 @@ f:SetScript("OnEvent", function(self, event)
             end
         end
 
-        -- Redraw non-hint upper portion
         GameTooltip:ClearLines()
         for i = 1, cutIndex do
             local l = lines[i]
@@ -157,7 +184,6 @@ f:SetScript("OnEvent", function(self, event)
             end
         end
 
-        -- Append dynamic hint lines based on row type
         local opens = QM:ClickOpensQuestLog()
         local waypointHint = isObjectiveLine and (L["CLICK_OBJECTIVE_WAYPOINT"] or "Left-click: Arrow to this objective")
                                              or (L["CLICK_SET_WAYPOINT"] or "Left-click: Set waypoint")
@@ -186,7 +212,7 @@ f:SetScript("OnEvent", function(self, event)
     end
 
     -- ------------------------------------------------------------------------
-    -- 4. Hook Quest Title Rows
+    -- 5. Hook Tracker Rows (Title & Objective Lines)
     -- ------------------------------------------------------------------------
     local function HookQuestTitleRow(row)
         if row._tweakedTitleRow then return end
@@ -221,9 +247,6 @@ f:SetScript("OnEvent", function(self, event)
         end)
     end
 
-    -- ------------------------------------------------------------------------
-    -- 5. Hook Objective Line Rows
-    -- ------------------------------------------------------------------------
     local function HookObjectiveLineRow(row)
         if row._tweakedLineRow then return end
         row._tweakedLineRow = true
@@ -257,19 +280,14 @@ f:SetScript("OnEvent", function(self, event)
         end)
     end
 
-    -- ------------------------------------------------------------------------
-    -- 6. Hook Tracker Frame Updates (Title Override & Scanning Rows)
-    -- ------------------------------------------------------------------------
     hooksecurefunc(QM, "UpdateTracker", function()
 
-        -- Hook active quest title rows
         if QM.TrackerQuestRows then
             for _, row in ipairs(QM:TrackerQuestRows()) do
                 HookQuestTitleRow(row)
             end
         end
 
-        -- Hook active objective line rows (children of TrackerFrame.content)
         if QM.TrackerFrame and QM.TrackerFrame.content then
             local children = { QM.TrackerFrame.content:GetChildren() }
             for _, child in ipairs(children) do
@@ -281,7 +299,7 @@ f:SetScript("OnEvent", function(self, event)
     end)
 
     -- ------------------------------------------------------------------------
-    -- 7. World Map & Minimap Turn-in Pins
+    -- 6. World Map & Minimap Pin Hooks
     -- ------------------------------------------------------------------------
     local function HookMapPin(pin)
         if pin._tweakedPin then return end
@@ -293,7 +311,7 @@ f:SetScript("OnEvent", function(self, event)
             local data = self.pinData
             local isTurnIn = (data.pinType == "turnin")
 
-            -- Normal Left-Click on Turn-In: Open Quest Log
+            -- Turn-In: plain left-click opens log
             if isTurnIn and not IsShiftKeyDown() then
                 if QM.OpenQuestLog then
                     QM:OpenQuestLog(data.questId)
@@ -301,7 +319,7 @@ f:SetScript("OnEvent", function(self, event)
                 return
             end
 
-            -- Shift + Left-Click on Turn-In OR normal click on others: Set Waypoint
+            -- Available (!), Objective, or Shift+Turn-in: Set Manual Waypoint
             QM:SetWaypoint(
                 data.questId,
                 data.objectiveIndex or 0,
@@ -309,8 +327,14 @@ f:SetScript("OnEvent", function(self, event)
                 data.y,
                 data.mapId,
                 data.description or data.title,
-                true
+                true  -- isManual = true
             )
+
+            -- Enforce manual lock flags
+            QM.isManualWaypoint = true
+            if QM.currentWaypoint then
+                QM.currentWaypoint.isManual = true
+            end
 
             if QM.ArrowFrame then
                 QM.ArrowFrame:SetAlpha(0)
@@ -376,7 +400,7 @@ f:SetScript("OnEvent", function(self, event)
 
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("|cFF888888" .. L["CLICK_OPEN_QUESTLOG"] .. "|r")
-            GameTooltip:AddLine("|cFF888888" .. L["MAP_CLICK_SET_WAYPOINT"] .. "|r")
+            GameTooltip:AddLine("|cFF888888" .. (L["MAP_CLICK_SET_WAYPOINT"] or L["CLICK_SET_WAYPOINT"]) .. "|r")
             GameTooltip:Show()
         end)
     end
