@@ -341,9 +341,6 @@ f:SetScript("OnEvent", function(self, event)
     end
 
     hooksecurefunc(QM, "UpdateTracker", function()
-        if QM.TrackerFrame and QM.TrackerFrame.header and QM.TrackerFrame.header.title then
-            QM.TrackerFrame.header.title:SetText("|cFFFFD700Quests|r")
-        end
 
         if QM.TrackerQuestRows then
             for _, row in ipairs(QM:TrackerQuestRows()) do
