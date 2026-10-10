@@ -490,6 +490,29 @@ f:SetScript("OnEvent", function(self, event)
         end
     end
 
+    -- ------------------------------------------------------------------------
+    -- 7. Escape Key Support for QuestMaster Settings Panel
+    -- ------------------------------------------------------------------------
+    local function RegisterSettingsEscape()
+        local frameName = "QuestMasterSettings"
+        if _G[frameName] then
+            for _, name in ipairs(UISpecialFrames) do
+                if name == frameName then return end
+            end
+            table.insert(UISpecialFrames, frameName)
+        end
+    end
+
+    -- Attempt immediate registration if frame already exists
+    RegisterSettingsEscape()
+
+    -- Hook ToggleSettings to ensure it is registered the first time it is opened
+    if QM.ToggleSettings then
+        hooksecurefunc(QM, "ToggleSettings", function()
+            RegisterSettingsEscape()
+        end)
+    end
+
     -- Initial refreshes
     if QM.UpdateMapPins then QM:UpdateMapPins() end
     if QM.UpdateTracker then QM:UpdateTracker() end
