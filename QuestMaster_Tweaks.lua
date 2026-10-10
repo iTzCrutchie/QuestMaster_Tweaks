@@ -90,17 +90,29 @@ f:SetScript("OnEvent", function(self, event)
     -- ------------------------------------------------------------------------
     -- 2. Waypoint Lock: Guard against auto-selector purging unaccepted quests
     -- ------------------------------------------------------------------------
+    local isSettingFromPin = false
+
     if QM.SetWaypoint then
         local origSetWaypoint = QM.SetWaypoint
         QM.SetWaypoint = function(self, questId, objIndex, x, y, mapId, title, isManual, ...)
+            isSettingFromPin = true
             origSetWaypoint(self, questId, objIndex, x, y, mapId, title, isManual, ...)
+            
             if isManual then
                 self.isManualWaypoint = true
                 if self.currentWaypoint then
                     self.currentWaypoint.isManual = true
+                    if title and title ~= "" then
+                        self.currentWaypoint.title = title
+                    end
                 end
                 self.manualWaypointSetAt = GetTime()
             end
+            
+            -- Reset flag on next frame so native map clicks can be distinguished
+            C_Timer.After(0.05, function()
+                isSettingFromPin = false
+            end)
         end
     end
 
@@ -115,6 +127,54 @@ f:SetScript("OnEvent", function(self, event)
                 return origPicker(self, ...)
             end
         end
+    end
+
+    -- ------------------------------------------------------------------------
+    -- 2b. Sync Native Map Pins (Terrain Clicks)
+    -- ------------------------------------------------------------------------
+    local userWaypointFrame = CreateFrame("Frame")
+    userWaypointFrame:RegisterEvent("USER_WAYPOINT_UPDATED")
+    userWaypointFrame:SetScript("OnEvent", function(self, event)
+        -- If triggered by an addon pin click, leave the quest title alone
+        if isSettingFromPin then return end
+
+        if C_Map and C_Map.HasUserWaypoint and C_Map.HasUserWaypoint() then
+            local mapPoint = C_Map.GetUserWaypoint()
+            if mapPoint then
+                -- Player clicked empty terrain: point arrow at custom waypoint
+                QM.isManualWaypoint = nil
+                if QM.currentWaypoint then
+                    QM.currentWaypoint.isManual = nil
+                end
+
+                if QM.SetWaypoint then
+                    QM:SetWaypoint(0, 0, mapPoint.position.x, mapPoint.position.y, mapPoint.uiMapID, "Custom Waypoint", true)
+                end
+            end
+        else
+            -- Waypoint was removed by the player
+            QM.isManualWaypoint = nil
+            if QM.currentWaypoint and QM.currentWaypoint.questId == 0 then
+                QM.currentWaypoint = nil
+                if QM.ClearWaypoint then
+                    QM:ClearWaypoint()
+                end
+            end
+        end
+    end)
+
+    if C_Map and C_Map.ClearUserWaypoint then
+        hooksecurefunc(C_Map, "ClearUserWaypoint", function()
+            if not isSettingFromPin then
+                QM.isManualWaypoint = nil
+                if QM.currentWaypoint and QM.currentWaypoint.questId == 0 then
+                    QM.currentWaypoint = nil
+                    if QM.ClearWaypoint then
+                        QM:ClearWaypoint()
+                    end
+                end
+            end
+        end)
     end
 
     -- ------------------------------------------------------------------------
@@ -281,6 +341,9 @@ f:SetScript("OnEvent", function(self, event)
     end
 
     hooksecurefunc(QM, "UpdateTracker", function()
+        if QM.TrackerFrame and QM.TrackerFrame.header and QM.TrackerFrame.header.title then
+            QM.TrackerFrame.header.title:SetText("|cFFFFD700Quests|r")
+        end
 
         if QM.TrackerQuestRows then
             for _, row in ipairs(QM:TrackerQuestRows()) do
@@ -320,13 +383,14 @@ f:SetScript("OnEvent", function(self, event)
             end
 
             -- Available (!), Objective, or Shift+Turn-in: Set Manual Waypoint
+            local waypointTitle = data.description or data.title
             QM:SetWaypoint(
                 data.questId,
                 data.objectiveIndex or 0,
                 data.x,
                 data.y,
                 data.mapId,
-                data.description or data.title,
+                waypointTitle,
                 true  -- isManual = true
             )
 
@@ -334,6 +398,9 @@ f:SetScript("OnEvent", function(self, event)
             QM.isManualWaypoint = true
             if QM.currentWaypoint then
                 QM.currentWaypoint.isManual = true
+                if waypointTitle and waypointTitle ~= "" then
+                    QM.currentWaypoint.title = waypointTitle
+                end
             end
 
             if QM.ArrowFrame then
