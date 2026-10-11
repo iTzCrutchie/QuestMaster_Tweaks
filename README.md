@@ -1,24 +1,23 @@
 # QuestMaster [Tweaks]
 
-A lightweight companion addon for **QuestMaster** (World of Warcraft) that refines UI interactions, fixes stock waypoint and options bugs, and provides localized tooltip enhancements without altering core addon files.
+A lightweight companion addon for **QuestMaster** (World of Warcraft - Forever) that refines UI interactions, fixes stock waypoint and options bugs, and provides localized tooltip enhancements without altering core addon files.
 
 ---
 
 ## Features & Bug Fixes
 
 - **Waypoint Lock for Available Quests (!):**
-  - Fixes an upstream issue where manual waypoints placed on unaccepted quest givers were immediately purged and reverted to the nearest active quest by the auto-waypoint tracker.
+  - Fixes an issue where manual waypoints placed on unaccepted quest givers were immediately reverted to the nearest active quest by the auto-waypoint tracker.
 - **Native World Map Waypoint Synchronization:**
-  - Setting a manual point on empty map terrain cleanly releases QuestMaster's internal quest lock and names the point "Custom Waypoint", preventing the arrow from fighting Blizzard's user pin.
-  - Clicking an available quest pin (!) retains the actual quest name on the waypoint rather than falling back to "Custom Waypoint".
+  - Setting a manual point on empty map terrain names the point "Custom Waypoint"
+  - Adds an ETA to the waypoint to indicate roughly how far in time you are away from the pin
 - **Options Menu Escape Key Support:**
-  - Registers `QuestMasterSettings` into Blizzard's `UISpecialFrames` so the options window closes when pressing the `Escape` key.
+  - Allows the options window to be closed with the escape key
 - **World Map Turn-in Interaction:**
   - **Left-Click** on a turn-in pin (?) directly opens the quest in your Quest Log.
   - **Shift + Left-Click** on a turn-in pin sets a manual navigation waypoint/arrow.
   - Objective pins and quest givers retain standard left-click waypoint targeting.
 - **Dynamic Tracker Tooltips & Keybinds:**
-  - Replaces default instructions on both **Quest Title Cards** and individual **Objective Line Rows** with clean, non-duplicated hints.
   - Dynamically updates tooltip hints based on your configured modifier preference (`ctrl`, `alt`, or `plain click`).
 - **Comprehensive Localization:**
   - Full translations for `enUS`, `deDE`, `esES`/`esMX`, `frFR`, `itIT`, `koKR`, `ptBR`, `ruRU`, `zhCN`, and `zhTW`.
@@ -64,16 +63,18 @@ A lightweight companion addon for **QuestMaster** (World of Warcraft) that refin
    QuestMaster_Tweaks/
    |-- QuestMaster_Tweaks.toc
    |-- QuestMaster_Tweaks.lua
+   |-- Locales
+   |-- Modules
    \-- README.md
    ```
-4. Restart World of Warcraft completely so the client detects the `.toc` file.
+4. Restart World of Warcraft
 5. In your character selection screen, click **AddOns** and ensure **QuestMaster [Tweaks]** is enabled.
 
 ---
 
 ## Requirements
 
-- **QuestMaster** (Loaded as a hard dependency in `.toc`).
+- **QuestMaster** (Loaded as a dependency in `.toc`).
 
 ---
 
