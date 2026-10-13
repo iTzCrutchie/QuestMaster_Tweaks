@@ -59,7 +59,7 @@ function Tweaks.ClearCurrentMarker()
         _G.QuestMasterWorldMarker:Hide()
     end
 
-    -- 6. HIDE THE ENTIRE ARROW FRAME (no gray idle arrow)
+    -- 6. Hide the arrow frame
     if QM.ArrowFrame then
         QM.ArrowFrame:Hide()
     end

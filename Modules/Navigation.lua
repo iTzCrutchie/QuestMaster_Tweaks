@@ -5,7 +5,9 @@ Tweaks.Modules["Navigation"] = Navigation
 function Navigation:Init(QM)
     Tweaks.isSettingFromPin = false
 
--- 0. Restore persistent cleared state on load / reload
+    -- ------------------------------------------------------------------------
+    -- 0. Restore persistent cleared state on load / reload
+    -- ------------------------------------------------------------------------
     if QM.db and QM.db.char and QM.db.char.userClearedWaypoint then
         QM.userClearedWaypoint = true
         QM.currentWaypoint = nil
@@ -13,7 +15,7 @@ function Navigation:Init(QM)
     end
 
 -- ------------------------------------------------------------------------
-    -- 1. Suppress Auto-Waypoint and Hide Gray Idle Arrow
+    -- 1. Suppress Auto-Waypoint and Hide Waypoint Arrow
     -- ------------------------------------------------------------------------
     if QM.AutoSelectBestWaypoint then
         local origAutoSelect = QM.AutoSelectBestWaypoint
@@ -125,7 +127,9 @@ function Navigation:Init(QM)
         end
     end)
 
+    -- ------------------------------------------------------------------------
     -- 4. Sync Native Map Pins (Terrain Clicks)
+    -- ------------------------------------------------------------------------
     local userWaypointFrame = CreateFrame("Frame")
     userWaypointFrame:RegisterEvent("USER_WAYPOINT_UPDATED")
     userWaypointFrame:SetScript("OnEvent", function(self, event)
@@ -163,8 +167,9 @@ function Navigation:Init(QM)
             end
         end)
     end
-
--- 5. Physical Right-Click & Complete Blizzard Beacon Scrubber
+    -- ------------------------------------------------------------------------
+    -- 5. Physical Right-Click & Complete Blizzard Beacon Scrubber
+    -- ------------------------------------------------------------------------
     local WM = QM.WorldMarker
     if WM then
         local function EnableMarkerMouse(marker)
