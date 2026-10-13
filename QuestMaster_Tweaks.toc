@@ -2,7 +2,7 @@
 ## Title: QuestMaster [|cFF00FF00Tweaks|r]
 ## Notes: Tweaks for QuestMaster.
 ## Author: QuestMaster Team, Crutchie
-## Version: 0.2.0
+## Version: 0.2.1
 ## Dependencies: QuestMaster
 
 Locales\Locales.lua

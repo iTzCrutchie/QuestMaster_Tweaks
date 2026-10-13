@@ -59,14 +59,9 @@ function Tweaks.ClearCurrentMarker()
         _G.QuestMasterWorldMarker:Hide()
     end
 
-    -- 6. Reset Arrow frame visuals
+    -- 6. HIDE THE ENTIRE ARROW FRAME (no gray idle arrow)
     if QM.ArrowFrame then
-        if QM.ArrowFrame.arrow then QM.ArrowFrame.arrow:Hide() end
-        if QM.ArrowFrame.shadow then QM.ArrowFrame.shadow:Hide() end
-        if QM.ArrowFrame.checkmark then QM.ArrowFrame.checkmark:Hide() end
-        if QM.ArrowFrame.distance then QM.ArrowFrame.distance:SetText("--") end
-        if QM.ArrowFrame.objective then QM.ArrowFrame.objective:SetText("|cFF888888No active objective|r") end
-        if QM.ArrowFrame.eta then QM.ArrowFrame.eta:SetText("") end
+        QM.ArrowFrame:Hide()
     end
 
     PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)

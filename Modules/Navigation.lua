@@ -12,11 +12,12 @@ function Navigation:Init(QM)
         QM.manualWaypoint = false
     end
 
-    -- 1. Suppress Auto-Waypoint from resurrecting cleared waypoints
+-- ------------------------------------------------------------------------
+    -- 1. Suppress Auto-Waypoint and Hide Gray Idle Arrow
+    -- ------------------------------------------------------------------------
     if QM.AutoSelectBestWaypoint then
         local origAutoSelect = QM.AutoSelectBestWaypoint
         QM.AutoSelectBestWaypoint = function(self, force, ...)
-            -- Check both memory and persistent storage
             local isCleared = QM.userClearedWaypoint or (QM.db and QM.db.char and QM.db.char.userClearedWaypoint)
             if isCleared then
                 return
@@ -25,31 +26,35 @@ function Navigation:Init(QM)
         end
     end
 
-    -- 2. Guard WorldMarker:KeepOwnTarget
-    local WM = QM.WorldMarker
-    if WM and WM.KeepOwnTarget then
-        local origKeep = WM.KeepOwnTarget
-        WM.KeepOwnTarget = function(self, ...)
+    -- Prevent DrawArrow from keeping the gray idle arrow visible when cleared
+    if QM.DrawArrow then
+        local origDrawArrow = QM.DrawArrow
+        QM.DrawArrow = function(self, elapsed, ...)
             local isCleared = QM.userClearedWaypoint or (QM.db and QM.db.char and QM.db.char.userClearedWaypoint)
-            if isCleared then
-                return false
+            if isCleared or not self.currentWaypoint then
+                if QM.ArrowFrame and QM.ArrowFrame:IsShown() then
+                    QM.ArrowFrame:Hide()
+                end
+                return
             end
-            return origKeep(self, ...)
+            return origDrawArrow(self, elapsed, ...)
         end
     end
 
-    -- 3. Reset cleared flags when setting a new waypoint
+    -- ------------------------------------------------------------------------
+    -- 2. Reset Cleared Flags & Restore Arrow on Waypoint Assignment
+    -- ------------------------------------------------------------------------
     if QM.SetWaypoint then
         local origSetWaypoint = QM.SetWaypoint
         QM.SetWaypoint = function(self, questId, objIndex, x, y, mapId, title, isManual, ...)
-            -- Unlock the cleared state both in memory and saved profile
+            -- Unlock the cleared state
             QM.userClearedWaypoint = nil
             if QM.db and QM.db.char then
                 QM.db.char.userClearedWaypoint = nil
             end
 
             Tweaks.isSettingFromPin = true
-            origSetWaypoint(self, questId, objIndex, x, y, mapId, title, isManual, ...)
+            local result = origSetWaypoint(self, questId, objIndex, x, y, mapId, title, isManual, ...)
 
             if isManual then
                 self.isManualWaypoint = true
@@ -62,11 +67,63 @@ function Navigation:Init(QM)
                 self.manualWaypointSetAt = GetTime()
             end
 
+            -- Ensure ArrowFrame is visible and active
+            if QM.ArrowFrame and QM.db.profile.arrow.enabled then
+                QM.ArrowFrame:Show()
+                if QM.UpdateArrow then
+                    QM:UpdateArrow()
+                end
+            end
+
             C_Timer.After(0.05, function()
                 Tweaks.isSettingFromPin = false
             end)
+
+            return result
         end
     end
+
+    -- ------------------------------------------------------------------------
+    -- 3. Sync Native Map Pins (Custom Terrain Pins)
+    -- ------------------------------------------------------------------------
+    local userWaypointFrame = CreateFrame("Frame")
+    userWaypointFrame:RegisterEvent("USER_WAYPOINT_UPDATED")
+    userWaypointFrame:SetScript("OnEvent", function(self, event)
+        if Tweaks.isSettingFromPin then return end
+
+        if C_Map and C_Map.HasUserWaypoint and C_Map.HasUserWaypoint() then
+            local mapPoint = C_Map.GetUserWaypoint()
+            if mapPoint and mapPoint.position then
+                -- Player placed a new map pin on terrain: reset cleared states
+                QM.userClearedWaypoint = nil
+                if QM.db and QM.db.char then
+                    QM.db.char.userClearedWaypoint = nil
+                end
+                QM.isManualWaypoint = true
+
+                -- Apply waypoint to QuestMaster
+                if QM.SetWaypoint then
+                    QM:SetWaypoint(0, 0, mapPoint.position.x, mapPoint.position.y, mapPoint.uiMapID, "Custom Waypoint", true)
+                end
+
+                -- Force Arrow container to show and point to the new location
+                if QM.ArrowFrame and QM.db.profile.arrow.enabled then
+                    QM.ArrowFrame:Show()
+                    if QM.ArrowFrame.arrow then QM.ArrowFrame.arrow:Show() end
+                    if QM.ArrowFrame.shadow then QM.ArrowFrame.shadow:Show() end
+                end
+
+                if QM.UpdateArrow then
+                    QM:UpdateArrow()
+                end
+            end
+        else
+            local isCleared = QM.userClearedWaypoint or (QM.db and QM.db.char and QM.db.char.userClearedWaypoint)
+            if not isCleared and Tweaks.ClearCurrentMarker then
+                Tweaks.ClearCurrentMarker()
+            end
+        end
+    end)
 
     -- 4. Sync Native Map Pins (Terrain Clicks)
     local userWaypointFrame = CreateFrame("Frame")
