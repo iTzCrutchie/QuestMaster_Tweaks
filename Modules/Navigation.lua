@@ -5,10 +5,49 @@ Tweaks.Modules["Navigation"] = Navigation
 function Navigation:Init(QM)
     Tweaks.isSettingFromPin = false
 
-    -- 1. Waypoint Lock: Guard against auto-selector purging unaccepted quests
+-- 0. Restore persistent cleared state on load / reload
+    if QM.db and QM.db.char and QM.db.char.userClearedWaypoint then
+        QM.userClearedWaypoint = true
+        QM.currentWaypoint = nil
+        QM.manualWaypoint = false
+    end
+
+    -- 1. Suppress Auto-Waypoint from resurrecting cleared waypoints
+    if QM.AutoSelectBestWaypoint then
+        local origAutoSelect = QM.AutoSelectBestWaypoint
+        QM.AutoSelectBestWaypoint = function(self, force, ...)
+            -- Check both memory and persistent storage
+            local isCleared = QM.userClearedWaypoint or (QM.db and QM.db.char and QM.db.char.userClearedWaypoint)
+            if isCleared then
+                return
+            end
+            return origAutoSelect(self, force, ...)
+        end
+    end
+
+    -- 2. Guard WorldMarker:KeepOwnTarget
+    local WM = QM.WorldMarker
+    if WM and WM.KeepOwnTarget then
+        local origKeep = WM.KeepOwnTarget
+        WM.KeepOwnTarget = function(self, ...)
+            local isCleared = QM.userClearedWaypoint or (QM.db and QM.db.char and QM.db.char.userClearedWaypoint)
+            if isCleared then
+                return false
+            end
+            return origKeep(self, ...)
+        end
+    end
+
+    -- 3. Reset cleared flags when setting a new waypoint
     if QM.SetWaypoint then
         local origSetWaypoint = QM.SetWaypoint
         QM.SetWaypoint = function(self, questId, objIndex, x, y, mapId, title, isManual, ...)
+            -- Unlock the cleared state both in memory and saved profile
+            QM.userClearedWaypoint = nil
+            if QM.db and QM.db.char then
+                QM.db.char.userClearedWaypoint = nil
+            end
+
             Tweaks.isSettingFromPin = true
             origSetWaypoint(self, questId, objIndex, x, y, mapId, title, isManual, ...)
 
@@ -29,20 +68,7 @@ function Navigation:Init(QM)
         end
     end
 
-    local autoPickerNames = {"AutoSelectNearestQuest", "UpdateNearestWaypoint", "PickClosestObjective", "AutoSelectNext"}
-    for _, funcName in ipairs(autoPickerNames) do
-        if QM[funcName] then
-            local origPicker = QM[funcName]
-            QM[funcName] = function(self, ...)
-                if self.isManualWaypoint or (self.currentWaypoint and self.currentWaypoint.isManual) then
-                    return
-                end
-                return origPicker(self, ...)
-            end
-        end
-    end
-
-    -- 2. Sync Native Map Pins (Terrain Clicks)
+    -- 4. Sync Native Map Pins (Terrain Clicks)
     local userWaypointFrame = CreateFrame("Frame")
     userWaypointFrame:RegisterEvent("USER_WAYPOINT_UPDATED")
     userWaypointFrame:SetScript("OnEvent", function(self, event)
@@ -50,42 +76,120 @@ function Navigation:Init(QM)
 
         if C_Map and C_Map.HasUserWaypoint and C_Map.HasUserWaypoint() then
             local mapPoint = C_Map.GetUserWaypoint()
-            if mapPoint then
-                QM.isManualWaypoint = nil
-                if QM.currentWaypoint then
-                    QM.currentWaypoint.isManual = nil
+            if mapPoint and mapPoint.position then
+                QM.userClearedWaypoint = nil
+                if QM.db and QM.db.char then
+                    QM.db.char.userClearedWaypoint = nil
                 end
+                QM.isManualWaypoint = true
 
                 if QM.SetWaypoint then
                     QM:SetWaypoint(0, 0, mapPoint.position.x, mapPoint.position.y, mapPoint.uiMapID, "Custom Waypoint", true)
                 end
+
+                if QM.UpdateArrow then
+                    QM:UpdateArrow()
+                end
             end
         else
-            QM.isManualWaypoint = nil
-            if QM.currentWaypoint and QM.currentWaypoint.questId == 0 then
-                QM.currentWaypoint = nil
-                if QM.ClearWaypoint then
-                    QM:ClearWaypoint()
-                end
+            local isCleared = QM.userClearedWaypoint or (QM.db and QM.db.char and QM.db.char.userClearedWaypoint)
+            if not isCleared and Tweaks.ClearCurrentMarker then
+                Tweaks.ClearCurrentMarker()
             end
         end
     end)
 
     if C_Map and C_Map.ClearUserWaypoint then
         hooksecurefunc(C_Map, "ClearUserWaypoint", function()
-            if not Tweaks.isSettingFromPin then
-                QM.isManualWaypoint = nil
-                if QM.currentWaypoint and QM.currentWaypoint.questId == 0 then
-                    QM.currentWaypoint = nil
-                    if QM.ClearWaypoint then
-                        QM:ClearWaypoint()
-                    end
-                end
+            if not Tweaks.isSettingFromPin and not QM.userClearedWaypoint and Tweaks.ClearCurrentMarker then
+                Tweaks.ClearCurrentMarker()
             end
         end)
     end
 
-    -- 3. World Marker Live ETA Countdown
+-- 5. Physical Right-Click & Complete Blizzard Beacon Scrubber
+    local WM = QM.WorldMarker
+    if WM then
+        local function EnableMarkerMouse(marker)
+            if not marker then return end
+            local clickFrame = marker.head or marker.body
+            if clickFrame then
+                clickFrame:EnableMouse(true)
+                if clickFrame.RegisterForClicks then
+                    clickFrame:RegisterForClicks("RightButtonUp")
+                end
+                clickFrame:SetScript("OnMouseUp", function(self, button)
+                    if button == "RightButton" and Tweaks.ClearCurrentMarker then
+                        Tweaks.ClearCurrentMarker()
+                    end
+                end)
+            end
+        end
+
+        if WM.marker then
+            EnableMarkerMouse(WM.marker)
+        elseif WM.CreateMarker then
+            hooksecurefunc(WM, "CreateMarker", function(self)
+                EnableMarkerMouse(self.marker)
+            end)
+        end
+
+        -- Intercept ShowBlizzardMarker
+        if WM.ShowBlizzardMarker then
+            local origShowBlizz = WM.ShowBlizzardMarker
+            WM.ShowBlizzardMarker = function(self, show, ...)
+                if QM.userClearedWaypoint then
+                    return origShowBlizz(self, false, ...)
+                end
+                return origShowBlizz(self, show, ...)
+            end
+        end
+
+        -- Scrubber function: Hides the Blizzard diamond textures directly
+        local function ScrubNavTextures()
+            if not QM.userClearedWaypoint then return end
+
+            if _G.SuperTrackedFrame then
+                _G.SuperTrackedFrame:Hide()
+                _G.SuperTrackedFrame:SetAlpha(0)
+            end
+
+            if C_Navigation and C_Navigation.GetFrame then
+                local navFrame = C_Navigation.GetFrame()
+                if navFrame and navFrame ~= (WM and WM.marker) then
+                    navFrame:Hide()
+                    navFrame:SetAlpha(0)
+
+                    -- Hide all child textures/regions inside Blizzard's navigation frame
+                    for _, region in ipairs({ navFrame:GetRegions() }) do
+                        if region:IsObjectType("Texture") then
+                            region:SetAlpha(0)
+                            region:Hide()
+                        end
+                    end
+                    for _, child in ipairs({ navFrame:GetChildren() }) do
+                        if child ~= (WM and WM.marker) then
+                            child:Hide()
+                            child:SetAlpha(0)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Run scrubber every frame tick while userClearedWaypoint is active
+        if WM.UpdateMarker then
+            hooksecurefunc(WM, "UpdateMarker", function(self)
+                if QM.userClearedWaypoint then
+                    ScrubNavTextures()
+                end
+            end)
+        end
+    end
+
+    -- ------------------------------------------------------------------------
+    -- 6. World Marker Suppression & Live ETA Countdown
+    -- ------------------------------------------------------------------------
     local smoothedSpeed = 7.0
     local lastPlayerX, lastPlayerY, lastPlayerTime
 
@@ -102,15 +206,33 @@ function Navigation:Init(QM)
 
     local WM = QM.WorldMarker
     if WM and WM.UpdateMarker then
-        hooksecurefunc(WM, "UpdateMarker", function(self)
-            local marker = self.marker
-            if not (marker and marker:IsShown() and marker.distance and marker.distance:IsShown()) then
+        local origUpdateMarker = WM.UpdateMarker
+        WM.UpdateMarker = function(self, dt, ...)
+            -- ABORT & HIDE: If the waypoint was cleared by the user, keep it completely hidden
+            if QM.userClearedWaypoint then
+                if self.marker and self.marker:IsShown() then
+                    self.marker:Hide()
+                end
+                if _G.QuestMasterWorldMarker and _G.QuestMasterWorldMarker:IsShown() then
+                    _G.QuestMasterWorldMarker:Hide()
+                end
                 return
             end
 
+            -- Otherwise, run QuestMaster's normal UpdateMarker logic
+            local result = origUpdateMarker(self, dt, ...)
+
+            -- Live ETA addition
+            local marker = self.marker
+            if not (marker and marker:IsShown() and marker.distance and marker.distance:IsShown()) then
+                return result
+            end
+
             local wp = QM.currentWaypoint
+            if not wp then return result end
+
             local yards
-            if wp and wp.x and wp.mapId and QM.GetDistanceToPoint then
+            if wp.x and wp.mapId and QM.GetDistanceToPoint then
                 local d = QM:GetDistanceToPoint(wp.x, wp.y, wp.mapId)
                 if type(d) == "number" and d < 99999 then yards = d end
             end
@@ -119,7 +241,7 @@ function Navigation:Init(QM)
                 if ok and type(d) == "number" and d > 0 then yards = d end
             end
 
-            if not yards or yards <= 5 then return end
+            if not yards or yards <= 5 then return result end
 
             local speed = GetUnitSpeed("player")
             local now = GetTime()
@@ -157,6 +279,8 @@ function Navigation:Init(QM)
                     marker.distance:SetText(distText .. "\n" .. etaStr)
                 end
             end
-        end)
+
+            return result
+        end
     end
 end

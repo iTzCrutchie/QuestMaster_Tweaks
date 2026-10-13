@@ -1,6 +1,10 @@
 local addonName, Tweaks = ...
 Tweaks.Locales = {}
 
+-- Global Keybinding Strings (must be set in global scope on load)
+_G["BINDING_HEADER_QMTWEAKS"] = "QuestMaster [Tweaks]"
+_G["BINDING_NAME_QMTWEAKS_CLEAR_WAYPOINT"] = "Clear Current Waypoint / Marker"
+
 function Tweaks.Locales:Load(QM)
     local L = QM.L or {}
     local locale = GetLocale()

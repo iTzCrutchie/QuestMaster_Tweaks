@@ -19,6 +19,8 @@ A lightweight companion addon for **QuestMaster** (World of Warcraft - Forever) 
   - Objective pins and quest givers retain standard left-click waypoint targeting.
 - **Dynamic Tracker Tooltips & Keybinds:**
   - Dynamically updates tooltip hints based on your configured modifier preference (`ctrl`, `alt`, or `plain click`).
+- **Clear a markers or waypoints:**
+  - Clear markers or waypoints with a right click on the worl map, a custom keybind set through WoW's keybind interface. or running /qm cm, /qm clearmarker, /qmcm, or /clearmarker
 - **Comprehensive Localization:**
   - Full translations for `enUS`, `deDE`, `esES`/`esMX`, `frFR`, `itIT`, `koKR`, `ptBR`, `ruRU`, `zhCN`, and `zhTW`.
 

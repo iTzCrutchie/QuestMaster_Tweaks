@@ -1,0 +1,7 @@
+<Bindings>
+    <Binding name="QMTWEAKS_CLEAR_WAYPOINT" header="QMTWEAKS" category="QuestMaster" runOnUp="false">
+        if QuestMaster_Tweaks and QuestMaster_Tweaks.ClearCurrentMarker then
+            QuestMaster_Tweaks.ClearCurrentMarker()
+        end
+    </Binding>
+</Bindings>
